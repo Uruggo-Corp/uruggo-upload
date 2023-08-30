@@ -1,31 +1,16 @@
+require("dotenv").config();
+
 const express = require("express");
 const multer = require("multer");
-const admin = require("firebase-admin");
-const { getApps } = require("firebase-admin/app");
+const cloudinary = require("cloudinary").v2;
 
-require("dotenv").config();
+// Return "https" URLs by setting secure: true
+cloudinary.config({
+  secure: true,
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Firebase Admin SDK
-const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
-const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY.replace(
-  /\\n/g,
-  "\n"
-);
-const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
-const FIREBASE_STORAGE_BUCKET_URL = process.env.FIREBASE_STORAGE_BUCKET;
-
-if (!getApps().length)
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: FIREBASE_PROJECT_ID,
-      privateKey: FIREBASE_PRIVATE_KEY,
-      clientEmail: FIREBASE_CLIENT_EMAIL,
-    }),
-    storageBucket: FIREBASE_STORAGE_BUCKET_URL,
-  });
 
 // Multer
 const upload = multer({
@@ -36,9 +21,7 @@ const upload = multer({
 });
 
 const generateUniqueFileName = (originalFileName) => {
-  const arr = originalFileName.split(".");
-  const extension = arr[arr.length - 1];
-  return `${new Date().getTime()}.${extension}`;
+  return `${new Date().getTime()}`;
 };
 
 app.use(express.json());
@@ -53,30 +36,30 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  const bucket = admin.storage().bucket();
-  const blob = bucket.file(generateUniqueFileName(req.file.originalname));
+  const { originalname, buffer } = req.file;
+  const fileName = generateUniqueFileName(originalname);
 
-  const blobWriter = blob.createWriteStream({
-    metadata: {
-      contentType: req.file.mimetype,
-      public: true,
-    },
-  });
+  try {
+    const result = await cloudinary.uploader.upload_stream(
+      {
+        resource_type: "image",
+        public_id: fileName,
+        overwrite: true,
+      },
+      (error, result) => {
+        if (error) {
+          console.log(error);
+          return res.status(500).json({ error });
+        }
+        res.status(200).json({ url: result.secure_url });
+      }
+    );
 
-  blobWriter.on("error", (err) => {
+    await result.end(buffer);
+  } catch (err) {
     console.log(err);
     res.status(500).json({ error: err });
-  });
-
-  blobWriter.on("finish", async () => {
-    const publicUrl = await blob.getSignedUrl({
-      action: "read",
-      expires: "03-09-2491",
-    });
-    res.status(200).json({ url: publicUrl[0] });
-  });
-
-  blobWriter.end(req.file.buffer);
+  }
 });
 
 // Delete route /delete/:fileName
@@ -87,12 +70,11 @@ app.delete("/delete/:fileName", async (req, res) => {
     return res.status(400).json({ error: "No file name provided" });
   }
 
-  const bucket = admin.storage().bucket();
-  const blob = bucket.file(fileName);
-
   try {
-    await blob.delete();
-    res.status(200).json({ message: "File deleted successfully" });
+    const result = await cloudinary.uploader.destroy(fileName, {
+      resource_type: "image",
+    });
+    res.status(200).json({ result });
   } catch (err) {
     console.log(err);
     res.status(500).json({ error: err });
