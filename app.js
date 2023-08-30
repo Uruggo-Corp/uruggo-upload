@@ -44,6 +44,10 @@ const generateUniqueFileName = (originalFileName) => {
 app.use(express.json());
 
 // Routes
+app.get("/", (req, res) => {
+  res.send("Hello World");
+});
+
 app.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded" });
