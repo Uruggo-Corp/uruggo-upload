@@ -36,13 +36,20 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     return res.status(400).json({ error: "No file uploaded" });
   }
 
-  const { originalname, buffer } = req.file;
+  const { originalname, buffer, mimetype } = req.file;
   const fileName = generateUniqueFileName(originalname);
+
+  if (
+    mimetype.split("/")[0] !== "image" &&
+    mimetype.split("/")[0] !== "video"
+  ) {
+    return res.status(400).json({ error: "File type not supported" });
+  }
 
   try {
     const result = await cloudinary.uploader.upload_stream(
       {
-        resource_type: "image",
+        resource_type: mimetype.split("/")[0],
         public_id: fileName,
         overwrite: true,
       },
