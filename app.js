@@ -50,8 +50,7 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const result = await cloudinary.uploader.upload_stream(
       {
         resource_type: mimetype.split("/")[0],
-        public_id: fileName,
-        overwrite: true,
+        unique_filename: true,
       },
       (error, result) => {
         if (error) {
